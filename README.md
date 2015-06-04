@@ -9,6 +9,6 @@
 - 编辑 /etc/pam.d/sshd 文件，在 auth required pam_secken.so 后面添加你的 appid, appkey 和 uid
     看起来像这样
 ```
-auth required pam_secken.so abcdefghijklmnopqrstuvwxyz789012 ABCDEFGHIJK==
+auth required pam_secken.so abcdefghijklmnopqrstuvwxyz789012 theappkeyshouldkeepsecret ABCDEFGHIJK==
 ```
 - 再次 ssh 登录时，系统会像你的手机发送通知，请求允许登陆。

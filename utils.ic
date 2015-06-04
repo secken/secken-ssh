@@ -33,7 +33,6 @@ md5(int num, char *to, ...) {
         from = va_arg(fs, char*);
         memcpy(ptr, from, strlen(from));
         ptr = ptr + strlen(from);
-        // printf("from is %s, %d\n", from, num);
         if (--num == 0) {
             break;
         }
@@ -43,23 +42,21 @@ md5(int num, char *to, ...) {
     ptr = to;
     for (i = 0; i < 16; i ++) {
         sprintf(to + i*2, "%02x", x5[i]);
-        // printf("ptr is %s\n", to + i*2);
     }
     to[32] = 0;
-    // printf("md5 is %s\n", to);
     return 0;
 }
 
 
+// libcurl callback function
+// copy HTTP response data to our storage.
 size_t
 call_back(void *buffer, size_t size, size_t n, void *v) {
     char *ptr = NULL;
     ptr = v;
     if (BUFF_SIZE >= size * n) {
-        // printf("we got %u\n", size * n);
         memcpy(ptr, buffer, size * n);
         ptr[size * n] = 0;
-        // printf("ct is %s\n", ptr);
         indicator = 1;
     } else {
         indicator = -1;
@@ -69,6 +66,9 @@ call_back(void *buffer, size_t size, size_t n, void *v) {
 }
 
 
+// after base64ed, the uid could contain
+// character '+', here we need to encode
+// them with urlencode
 int
 escape(const char *from, char *to) {
     CURL *curl = curl_easy_init();
@@ -86,6 +86,8 @@ escape(const char *from, char *to) {
 }
 
 
+// perform HTTP GET and POST request
+// wish the libcurl could be easier to use.
 int
 call(const char *url, const char *args, int type) {
     CURL *curl = NULL;
@@ -114,37 +116,6 @@ call(const char *url, const char *args, int type) {
 }
 
 
-int
-verify(const char *name, const char *digits, const char *appid) {
-    const char right[] = "{\"flag\": 0}";
-    int ret = 0;
-    ptr = malloc(BUFF_SIZE);
-    if (ptr == NULL) {
-        return -1;
-    }
-    // ptr[0] = BUFF_SIZE;
-    // call(name, digits, (void*)ptr, appid);
-    while (1) {
-        if (ptr[0] == (BUFF_SIZE)) {
-            // printf("sleep 1\n");
-            sleep(1);
-            continue;
-        }
-        // printf("we get size %d\n", ptr[0]);
-        // printf("we get buffer %s\n", ptr + 1);
-        ret = memcmp(ptr + 1, right, strlen(right) + 1);
-        free(ptr);
-        if (ret == 0) {
-            return 0;
-        } else {
-            return -1;
-        }
-        break;
-    }
-    return -1;
-}
-
-
 const char qrcodeurl[] = "https://api.yangcong.com/v2/qrcode_for_auth";
 const char bindcodeurl[] = "https://api.yangcong.com/v2/qrcode_for_binding";
 const char resulturl[] = "https://api.yangcong.com/v2/event_result";
@@ -152,6 +123,8 @@ const char oneclickurl[] = "https://api.yangcong.com/v2/realtime_authorization";
 char event_id[100] = {0};
 char qr_code[255] = {0};
 char uid[100] = {0};
+// common use, one thread programe would be safe
+// enough to use a global variable.
 char buff[500] = {0};
 char mb[65] = {0};
 
@@ -280,6 +253,8 @@ get_uid(const char *id, const char *key) {
 }
 
 
+// call the api server to perform one click authentication
+// 42 is just a magic number, no need to think too much.
 int
 click(const char *appid, const char *appkey, const char *u) {
     int n = 0;
