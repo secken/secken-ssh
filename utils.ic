@@ -1,0 +1,304 @@
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <curl/curl.h>
+#include <stdio.h>
+#include <openssl/md5.h>
+#include <stdarg.h>
+#include "cJSON.h"
+
+const int TYPE_POST = 1;
+const int TYPE_GET = 2;
+#define BUFF_SIZE (500)
+char buffer[BUFF_SIZE] = {0};
+// we could put a lock here to
+// protect indicator if needed
+int indicator = 0;
+char *ptr = buffer;
+
+
+// XXX this is a dangerous dick
+// if you pass less or wrong type data to this func
+// it would raise signal SEGV
+int
+md5(int num, char *to, ...) {
+    char *from = NULL;
+    int i;
+    char buff[500] = {0};
+    unsigned char x5[32] = {0};
+    char *ptr = buff;
+    va_list fs;
+    va_start(fs, to);
+    while (42) {
+        from = va_arg(fs, char*);
+        memcpy(ptr, from, strlen(from));
+        ptr = ptr + strlen(from);
+        // printf("from is %s, %d\n", from, num);
+        if (--num == 0) {
+            break;
+        }
+    }
+    va_end(fs);
+    MD5(buff,strlen(buff), x5);
+    ptr = to;
+    for (i = 0; i < 16; i ++) {
+        sprintf(to + i*2, "%02x", x5[i]);
+        // printf("ptr is %s\n", to + i*2);
+    }
+    to[32] = 0;
+    // printf("md5 is %s\n", to);
+    return 0;
+}
+
+
+size_t
+call_back(void *buffer, size_t size, size_t n, void *v) {
+    char *ptr = NULL;
+    ptr = v;
+    if (BUFF_SIZE >= size * n) {
+        // printf("we got %u\n", size * n);
+        memcpy(ptr, buffer, size * n);
+        ptr[size * n] = 0;
+        // printf("ct is %s\n", ptr);
+        indicator = 1;
+    } else {
+        indicator = -1;
+        printf("Error: size is %u\n", size * n);
+    }
+    return n * size;
+}
+
+
+int
+escape(const char *from, char *to) {
+    CURL *curl = curl_easy_init();
+    char *out = NULL;
+    if (NULL == curl) {
+        return -1;
+    }
+    out = curl_easy_escape(curl, from, strlen(from));
+    if (NULL == out) {
+        return -2;
+    }
+    memcpy(to, out, strlen(out) + 1);
+    curl_free(out);
+    return 0;
+}
+
+
+int
+call(const char *url, const char *args, int type) {
+    CURL *curl = NULL;
+    CURLcode res;
+    char buffer[2000] = {0};
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+    curl = curl_easy_init();
+    if (curl == NULL) {
+        return -1;
+    }
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, call_back);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, ptr);
+    if (type == TYPE_POST) {
+        curl_easy_setopt(curl, CURLOPT_POST, 1);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, args);
+    }
+
+    res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        printf("res is %s\n", curl_easy_strerror(res));
+    }
+    curl_easy_cleanup(curl);
+    curl_global_cleanup();
+    return 0;
+}
+
+
+int
+verify(const char *name, const char *digits, const char *appid) {
+    const char right[] = "{\"flag\": 0}";
+    int ret = 0;
+    ptr = malloc(BUFF_SIZE);
+    if (ptr == NULL) {
+        return -1;
+    }
+    // ptr[0] = BUFF_SIZE;
+    // call(name, digits, (void*)ptr, appid);
+    while (1) {
+        if (ptr[0] == (BUFF_SIZE)) {
+            // printf("sleep 1\n");
+            sleep(1);
+            continue;
+        }
+        // printf("we get size %d\n", ptr[0]);
+        // printf("we get buffer %s\n", ptr + 1);
+        ret = memcmp(ptr + 1, right, strlen(right) + 1);
+        free(ptr);
+        if (ret == 0) {
+            return 0;
+        } else {
+            return -1;
+        }
+        break;
+    }
+    return -1;
+}
+
+
+const char qrcodeurl[] = "https://api.yangcong.com/v2/qrcode_for_auth";
+const char bindcodeurl[] = "https://api.yangcong.com/v2/qrcode_for_binding";
+const char resulturl[] = "https://api.yangcong.com/v2/event_result";
+const char oneclickurl[] = "https://api.yangcong.com/v2/realtime_authorization";
+char event_id[100] = {0};
+char qr_code[255] = {0};
+char uid[100] = {0};
+char buff[500] = {0};
+char mb[65] = {0};
+
+
+// calling Secken api
+// to get if user has performed or not
+int
+get_result(const char *eid, const char *id, const char *key) {
+    int n;
+    n = md5(5, mb, "app_id=", id, "event_id=", eid, key);
+    if (n < 0) {
+        return n;
+    }
+    sprintf(buff, "%s%s%s%s%s%s%s", resulturl, "?app_id=", id,
+        "&event_id=", eid, "&signature=", mb);
+    return call(buff, NULL, TYPE_GET);
+}
+
+
+// perform one click request
+// wait for user to click.
+int
+one_click(const char *appid, const char *appkey, const char *uid) {
+    int n;
+    char postbuff[500] = {0};
+    char ue[128] = {0};
+    n = escape(uid, ue);
+    if (n < 0) {
+        return -1;
+    }
+    n = md5(5, mb, "action_type=loginapp_id=", appid,
+        "uid=", uid, appkey);
+    if (n < 0) {
+        return -1;
+    }
+    sprintf(buff, "%s", oneclickurl);
+    sprintf(postbuff, "%s%s%s%s%s%s%s",
+        "action_type=login&app_id=", appid,
+        "&uid=", ue,
+        "&user_ip=0.0.0.0&username=username",
+        "&signature=", mb);
+    n = call(buff, postbuff, TYPE_POST);
+    return n;
+}
+
+
+// when initiating, get a qr code
+// for user to scan and get their
+// uid accordingly.
+int
+get_bind_code(const char *id, const char *key) {
+    int n;
+    n = md5(3, mb, "app_id=", id, key);
+    if (n < 0) {
+        return n;
+    }
+    sprintf(buff, "%s%s%s%s%s", bindcodeurl,
+        "?app_id=", id,
+        "&signature=", mb);
+    n = call(buff, NULL, TYPE_GET);
+    return n;
+}
+
+
+// get the HTTP result and inspect
+// the content to get the piece we need
+int
+process_result(void) {
+    if (indicator != 1) {
+        return -1;
+    }
+    cJSON *root = cJSON_Parse(buffer);
+    cJSON *cj = cJSON_GetObjectItem(root, "status");
+    if (cj->valueint == 200) {
+        cJSON *q = cJSON_GetObjectItem(root, "qrcode_url");
+        cJSON *e = cJSON_GetObjectItem(root, "event_id");
+        cJSON *u = cJSON_GetObjectItem(root, "uid");
+        if (NULL != q) {
+            memcpy(qr_code, q->valuestring, strlen(q->valuestring) + 1);
+            printf("url is %s\n", qr_code);
+        }
+        if (NULL != e) {
+            memcpy(event_id, e->valuestring, strlen(e->valuestring) + 1);
+        }
+        if (NULL != u) {
+            memcpy(uid, u->valuestring, strlen(u->valuestring) + 1);
+            printf("uid is %s\n", uid);
+        }
+        // HTTP OK
+        return 200;
+    }
+    return cj->valueint;
+}
+
+
+// when user's scanned the qr code for binding
+// we would get the uid.
+int
+get_uid(const char *id, const char *key) {
+    int n;
+    indicator = 0;
+    n = get_bind_code(id, key);
+    if (n != 0) {
+        printf("Error: n is %d\n", n);
+        return n;
+    }
+    if (process_result() != 200) {
+        printf("Error: get bind code\n");
+        return -1;
+    }
+    n = 0;
+    while (++ n) {
+        // test if the qr code is scanned
+        get_result(event_id, id, key);
+        if (process_result() == 200) {
+            break;
+        }
+        sleep(1);
+        // answer to the ultimate question of life, the universe, and everything
+        if (n >= 42) {
+            printf("It's been too long time, yet you haven't scan it\n");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+
+int
+click(const char *appid, const char *appkey, const char *u) {
+    int n = 0;
+    one_click(appid, appkey, u);
+    if (process_result() != 200) {
+        printf("Error: get one click\n");
+        return -1;
+    }
+    while (++ n) {
+        // test if user has click OK to authenticate
+        get_result(event_id, appid, appkey);
+        if (process_result() == 200) {
+            break;
+        }
+        sleep(1);
+        if (n > 42) {
+            printf("it's been too long time, rejected.\n");
+            return -1;
+        }
+    }
+    return 0;
+}
