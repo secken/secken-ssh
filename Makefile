@@ -29,7 +29,7 @@ all: pam_secken.c
 
 
 init: cJSON.h init.c
-	gcc -o get_uid cJSON.c init.c -lcurl -lm
+	gcc -o get_uid cJSON.c init.c -lcurl -lm -lcrypto
 
 install: pam_secken.so
 	install -D pam_secken.so /lib64/security/pam_secken.so

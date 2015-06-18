@@ -1,6 +1,6 @@
 ## Secken PAM Module
 
-- 你需要安装 ssh server 和 pam 的开发库。
+- 你需要安装 ssh server 和 pam 的开发库，具体请参见 dep.sh 。
 - 运行 make init 会编译出 get_uid 程序。
 - ./get_uid &lt;appid&gt; &lt; appkey &gt; 其中appid 是你在 Secken 添加的 app 对应的 appid，appkey 与此类似。
 - get_uid 返回一个二维码的连接，在你最喜爱的浏览器中打开它，用洋葱客户端扫描。
