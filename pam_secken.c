@@ -53,9 +53,19 @@ sk_login(pam_handle_t *pamh, const char *appid, const char *appkey, const char *
     // until time out or user's
     // approval
     pam_syslog(pamh, LOG_NOTICE, "start to click\n");
-    ret = click(appid, appkey, uid);
-    if (ret == 0) {
-        return true;
+    //ret = click(appid, appkey, uid);
+    //if (ret == 0) {
+    //    return true;
+    //}
+    char *str_copy = (char*)malloc(sizeof(uid));
+    strcpy(str_copy,uid);
+    char* token = strtok(str_copy, ",");
+    while ( token != NULL ) {
+        ret = click(appid, appkey, token);
+        if (ret == 0) {
+           return true;
+        }
+        token = strtok( NULL, ",");
     }
     pam_syslog(pamh, LOG_NOTICE, "fail to pass due to %d\n", ret);
     return false;
