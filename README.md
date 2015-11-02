@@ -11,4 +11,8 @@
 ```
 auth required pam_secken.so abcdefghijklmnopqrstuvwxyz789012 theappkeyshouldkeepsecret ABCDEFGHIJK==
 ```
+- 支持多个uid验证，顺序验证，任何一个uid验证通过即验证通过。你需要这样配置。(使用,作为分隔符)
+```
+auth required pam_secken.so abcdefghijklmnopqrstuvwxyz789012 theappkeyshouldkeepsecret ABCDEFGHIJK==,KJHGFDSA==
+```
 - 再次 ssh 登录时，系统会像你的手机发送通知，请求允许登陆。
