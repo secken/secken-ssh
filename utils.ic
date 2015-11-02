@@ -270,7 +270,7 @@ click(const char *appid, const char *appkey, const char *u) {
             break;
         }
         sleep(1);
-        if (n > 42) {
+        if (n > 12) {
             printf("it's been too long time, rejected.\n");
             return -1;
         }
